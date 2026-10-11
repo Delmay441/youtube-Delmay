@@ -2,26 +2,29 @@
   APPEARANCE
 ------------------------------------------------------------------------------*/
 ImprovedTube.YouTubeExperiments = function () {
-	if ((this.storage.undo_the_new_sidebar === "true" || this.storage.description === "sidebar")
+	const undoSidebar = this.storage.undo_the_new_sidebar === true || this.storage.undo_the_new_sidebar === "true"; // switches store booleans; "true" kept for old data
+	const restoreLayout = this.restoreClassicWatchLayoutEnabled();
+	if ((undoSidebar || restoreLayout || this.storage.description === "sidebar")
 		&& document.documentElement.dataset.pageType === 'video') {
 	if (window.yt?.config_?.EXPERIMENT_FLAGS) {
-		const newSidebarFlags = [
+		// default-on classic layout only needs the layout flag; the explicit "undo" switch keeps the full cosmetic list
+		const newSidebarFlags = (restoreLayout && !undoSidebar && this.storage.description !== "sidebar") ? ['kevlar_watch_grid'] : [
 			'kevlar_watch_grid',
 			'small_avatars_for_comments',
 			'small_avatars_for_comments_ep',
 			'web_watch_rounded_player_large'
 		];
-	        if (this.storage.undo_the_new_sidebar === "true") {
+	        if (undoSidebar || restoreLayout) {
 		if (window.yt.config_.EXPERIMENT_FLAGS.kevlar_watch_grid !== false) {
 			try {
                 	newSidebarFlags.forEach(F => {
-                  	  Object.defineProperty(window.yt.config_.EXPERIMENT_FLAGS, F, { get: () => false });
+                  	  Object.defineProperty(window.yt.config_.EXPERIMENT_FLAGS, F, { get: () => false, configurable: true, enumerable: true });
 			});
 			} catch (error) { console.error("can't undo description on the side", error); }
 		}} else if (this.storage.description === "sidebar" && window.yt.config_.EXPERIMENT_FLAGS.kevlar_watch_grid !== true) {
 			try {
                 	newSidebarFlags.forEach(F => {
-                   	Object.defineProperty(window.yt.config_.EXPERIMENT_FLAGS, F, { get: () => true });
+                   	Object.defineProperty(window.yt.config_.EXPERIMENT_FLAGS, F, { get: () => true, configurable: true, enumerable: true });
 			});
 			} catch (error) { console.error("tried to move description to the sidebar", error); }
 		}
@@ -214,6 +217,117 @@ ImprovedTube.playerRemainingDuration = function () {
 };
 
 
+/*------------------------------------------------------------------------------
+ Restore classic watch layout
+  YouTube's desktop experiment puts #comments in the right column and #related below
+  the player. Moves them back (comments under the video info, recommended on the right).
+  First choice is the experiment-flag override in YouTubeExperiments(); this is the
+  structural fallback for when the flags are applied too late or YouTube changes them.
+------------------------------------------------------------------------------*/
+ImprovedTube.restoreClassicWatchLayoutEnabled = function () {
+	const storage = ImprovedTube.storage;
+	// Default ON. Stay out of the way when the user deliberately wants comments/description in the sidebar.
+	return storage.restore_classic_watch_layout !== false
+		&& storage.comments_sidebar !== true
+		&& storage.comments_sidebar_simple !== true
+		&& storage.description !== 'sidebar';
+};
+ImprovedTube.restoreClassicWatchLayout = function () {
+	const state = ImprovedTube.classicLayoutState || (ImprovedTube.classicLayoutState = {
+		observer: null,
+		frame: 0,
+		retryTimer: 0,
+		restoreTimes: [],
+		gaveUp: false
+	});
+	// Containers whose direct children YouTube (re)arranges. Watching childList only (no subtree) stays cheap
+	// and is not triggered by comments/recommendations streaming in (infinite scroll).
+	const CONTAINERS = ['columns', 'primary', 'primary-inner', 'below', 'secondary', 'secondary-inner'];
+
+	function stop () {
+		clearTimeout(state.retryTimer);
+		if (state.observer) {
+			state.observer.disconnect();
+			state.observer = null;
+		}
+	}
+	// Signature of the experiment: #comments inside the right column. No classic layout has that.
+	function isMisplaced () {
+		const secondary = document.getElementById('secondary');
+		const comments = document.getElementById('comments');
+		return !!(secondary && comments && secondary.contains(comments));
+	}
+	// moveBefore() keeps element state (no disconnect/reconnect), which keeps comment continuations intact.
+	function place (parent, node) {
+		if (!parent || !node || node.parentElement === parent) return;
+		try {
+			if (typeof parent.moveBefore === 'function') {
+				parent.moveBefore(node, null);
+				return;
+			}
+		} catch (error) { /* fall back to appendChild */ }
+		parent.appendChild(node);
+	}
+	function observe () {
+		if (state.observer) state.observer.disconnect();
+		state.observer = new MutationObserver(schedule);
+		CONTAINERS.forEach(function (id) {
+			const element = document.getElementById(id);
+			if (element) state.observer.observe(element, { childList: true });
+		});
+	}
+	function schedule () {
+		if (state.frame) return;
+		state.frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(restore) : setTimeout(restore, 16);
+	}
+	function restore () {
+		state.frame = 0;
+		if (!ImprovedTube.restoreClassicWatchLayoutEnabled()) {
+			stop();
+			return;
+		}
+		if (!isMisplaced()) return;
+
+		const comments = document.getElementById('comments');
+		const below = document.getElementById('below');
+		const related = document.getElementById('related');
+		const secondaryInner = document.getElementById('secondary-inner') || document.getElementById('secondary');
+		if (!below || !secondaryInner) return; // layout not rendered yet; the observer will call us again
+
+		// Safety valve: if YouTube keeps moving things back, don't fight it forever.
+		const now = Date.now();
+		state.restoreTimes = state.restoreTimes.filter(function (time) { return now - time < 3000; });
+		if (state.restoreTimes.length >= 6) {
+			if (!state.gaveUp) {
+				state.gaveUp = true;
+				console.warn('[ImprovedTube] Classic watch layout: YouTube keeps re-arranging the page, pausing until the next navigation.');
+			}
+			return;
+		}
+		state.restoreTimes.push(now);
+
+		place(below, comments);
+		place(secondaryInner, related);
+		observe(); // containers may have been re-created by YouTube; re-attach
+	}
+	function arm (attempt) {
+		clearTimeout(state.retryTimer);
+		if (document.getElementById('columns') && document.getElementById('secondary-inner')) {
+			observe();
+			restore();
+		} else if (attempt < 40) {
+			state.retryTimer = setTimeout(function () { arm(attempt + 1); }, 250);
+		}
+	}
+
+	if (!ImprovedTube.restoreClassicWatchLayoutEnabled() || document.documentElement.dataset.pageType !== 'video') {
+		stop();
+		return;
+	}
+	state.gaveUp = false;
+	state.restoreTimes = [];
+	arm(0);
+};
 /*------------------------------------------------------------------------------
  Comments Sidebar Simple
 ------------------------------------------------------------------------------*/

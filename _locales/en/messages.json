@@ -1596,6 +1596,9 @@
   "type": {
     "message": "Type"
   },
+  "restoreClassicWatchLayout": {
+    "message": "Restore classic watch layout (comments below, recommended on the right)"
+  },
   "undoTheNewSidebar": {
     "message": "Undo the new sidebar!"
   },

@@ -6,6 +6,7 @@
 	# Collapsed
 # Squared User Images
 # Hide avatars
+# Classic watch layout (flicker mask)
 # Sidebar
 --------------------------------------------------------------*/
 /* Comments - hide everything except "Comments are turned off."  */
@@ -223,3 +224,21 @@ html[data-page-type=video][it-comments-sidebar='true'] #playlist #items {max-hei
 /* these were global without [it-comments-sidebar='true']  @D-Rekk */
 html[data-page-type=video][it-comments-sidebar='true'] ytd-watch-flexy #chat > tp-yt-paper-button#label {width:calc(100% - 40px);}
 html[data-page-type=video][it-comments-sidebar='true'] ytd-watch-flexy #right-arrow-container.ytd-merch-shelf-renderer {right: 44px !important;}
+
+/*--------------------------------------------------------------
+# CLASSIC WATCH LAYOUT (flicker mask)
+----------------------------------------------------------------
+	ImprovedTube.restoreClassicWatchLayout() moves #comments back under the video and
+	#related back to the right. Until it has, keep the misplaced nodes invisible so they
+	don't flash in the wrong column. Same signature as the script: #comments in #secondary.
+	Fail-safe: the animation reveals them after 1.5s even if the script never runs.
+--------------------------------------------------------------*/
+@keyframes it-classic-layout-reveal {
+	to {visibility: visible;}
+}
+
+html[data-page-type=video]:not([it-restore-classic-watch-layout='false']):not([it-comments-sidebar='true']):not([it-comments-sidebar-simple='true']):not([it-description='sidebar']) ytd-watch-flexy #secondary #comments,
+html[data-page-type=video]:not([it-restore-classic-watch-layout='false']):not([it-comments-sidebar='true']):not([it-comments-sidebar-simple='true']):not([it-description='sidebar']) ytd-watch-flexy:has(#secondary #comments) #primary #related {
+	visibility: hidden;
+	animation: it-classic-layout-reveal 0s linear 1.5s forwards;
+}

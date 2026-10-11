@@ -199,6 +199,7 @@ ImprovedTube.init = function () {
 	this.youtubeLanguage();
 	this.myColors();
 	this.YouTubeExperiments();
+	this.restoreClassicWatchLayout();
 	this.channelCompactTheme();
 	this.categoryRefreshButton();
 	if (ImprovedTube.elements.player && ImprovedTube.elements.player.setPlaybackRate) {
@@ -252,6 +253,7 @@ document.addEventListener('yt-navigate-finish', function () {
 */
 	ImprovedTube.pageType();
 	ImprovedTube.YouTubeExperiments();
+	ImprovedTube.restoreClassicWatchLayout();
 	ImprovedTube.commentsSidebar();
 	ImprovedTube.categoryRefreshButton();
 	ImprovedTube.playerAutoContinueWatching();

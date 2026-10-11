@@ -1018,6 +1018,12 @@ extension.skeleton.main.layers.section.appearance.on.click.sidebar = {
 		click: {
 			component: "section",
 			variant: "card",
+			restore_classic_watch_layout: {
+				component: "switch",
+				text: "restoreClassicWatchLayout",
+				value: true,
+				tags: "comments,related,layout,experiment"
+			},
 			undo_the_new_sidebar: {
 				component: "switch",
 				text: "undoTheNewSidebar"
